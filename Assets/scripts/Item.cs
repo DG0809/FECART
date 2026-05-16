@@ -4,12 +4,12 @@ public class Item : MonoBehaviour
 {
     private Rigidbody rb;
     private bool isCollected = false;
-    private PlayerController playerController;
+    private Player playerController;
 
     private void Start()
     {
         rb = GetComponent<Rigidbody>();
-        playerController = FindObjectOfType<PlayerController>();
+        playerController = FindObjectOfType<Player>();
     }
 
     private void OnTriggerEnter(Collider collision)
