@@ -9,6 +9,9 @@ public class Item : MonoBehaviour
     private void Start()
     {
         rb = GetComponent<Rigidbody>();
+        if (rb == null)
+            rb = gameObject.AddComponent<Rigidbody>();
+
         playerController = FindObjectOfType<Player>();
     }
 

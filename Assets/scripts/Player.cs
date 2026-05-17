@@ -18,7 +18,6 @@ public class Player : MonoBehaviour
     {
         rb = GetComponent<Rigidbody>();
 
-        // Criar HandPoint se não existir
         if (handPoint == null)
         {
             GameObject hand = new GameObject("HandPoint");
@@ -27,7 +26,6 @@ public class Player : MonoBehaviour
             handPoint = hand.transform;
         }
 
-        // Criar Camera se não existir
         if (mainCamera == null)
         {
             GameObject cameraObj = new GameObject("MainCamera");
@@ -47,7 +45,6 @@ public class Player : MonoBehaviour
             }
         }
 
-        // Trancar e esconder mouse
         Cursor.lockState = CursorLockMode.Locked;
     }
 
@@ -115,11 +112,11 @@ public class Player : MonoBehaviour
                 {
                     item.Collect(handPoint);
 
-                    // Se for uma arma, equipe
                     Weapon weapon = lastItemCollider.GetComponent<Weapon>();
                     if (weapon != null)
                     {
                         equippedWeapon = weapon;
+                        weapon.NotifyCollected();
                     }
                 }
             }

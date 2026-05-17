@@ -24,6 +24,7 @@ public class Weapon : MonoBehaviour
     private float lastShotTime = 0f;
     private Vector3 originalPosition;
     private Player playerController;
+    private bool hasBeenCollected = false;
 
     private void Start()
     {
@@ -35,8 +36,16 @@ public class Weapon : MonoBehaviour
             shootPoint = shootPointObj.transform;
         }
 
-        originalPosition = transform.localPosition;
         playerController = FindObjectOfType<Player>();
+    }
+
+    private void OnCollected()
+    {
+        if (hasBeenCollected) return;
+        hasBeenCollected = true;
+
+        // Salva posição APÓS ser coletada (quando está na mão)
+        originalPosition = transform.localPosition;
         UpdateAmmoUI();
     }
 
@@ -71,7 +80,7 @@ public class Weapon : MonoBehaviour
     {
         if (balasNoPente <= 0) return;
 
-        GameObject bullet = Instantiate(bulletPrefab, shootPoint.position, shootPoint.rotation);
+        GameObject bullet = Instantiate(bulletPrefab, shootPoint.position, Quaternion.identity);
         Rigidbody bulletRb = bullet.GetComponent<Rigidbody>();
 
         if (bulletRb == null)
@@ -117,6 +126,9 @@ public class Weapon : MonoBehaviour
             yield return null;
         }
 
+        // Garantir que volta exatamente para originalPosition
+        transform.localPosition = originalPosition;
+
         // Completar o pente
         int balasFaltando = tamanhoDoPente - balasNoPente;
         int balasTransferidas = Mathf.Min(balasFaltando, balasNoBolso);
@@ -124,7 +136,6 @@ public class Weapon : MonoBehaviour
         balasNoPente += balasTransferidas;
         balasNoBolso -= balasTransferidas;
 
-        transform.localPosition = originalPosition;
         isReloading = false;
         UpdateAmmoUI();
     }
@@ -137,5 +148,10 @@ public class Weapon : MonoBehaviour
     public bool IsReloading()
     {
         return isReloading;
+    }
+
+    public void NotifyCollected()
+    {
+        OnCollected();
     }
 }
