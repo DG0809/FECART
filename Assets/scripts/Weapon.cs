@@ -31,8 +31,8 @@ public class Weapon : MonoBehaviour
         if (shootPoint == null)
         {
             GameObject shootPointObj = new GameObject("ShootPoint");
-            shootPointObj.transform.SetParent(transform);
-            shootPointObj.transform.localPosition = new Vector3(0, 0, 0.5f);
+            shootPointObj.transform.SetParent(transform.parent);
+            shootPointObj.transform.localPosition = transform.localPosition + new Vector3(0, 0, 0.5f);
             shootPoint = shootPointObj.transform;
         }
 
@@ -44,7 +44,6 @@ public class Weapon : MonoBehaviour
         if (hasBeenCollected) return;
         hasBeenCollected = true;
 
-        // Salva posição APÓS ser coletada (quando está na mão)
         originalPosition = transform.localPosition;
         UpdateAmmoUI();
     }
@@ -80,19 +79,40 @@ public class Weapon : MonoBehaviour
     {
         if (balasNoPente <= 0) return;
 
-        GameObject bullet = Instantiate(bulletPrefab, shootPoint.position, Quaternion.identity);
+        // Pega a câmera do player
+        Camera playerCamera = playerController.GetComponent<Camera>();
+        if (playerCamera == null)
+        {
+            playerCamera = playerController.GetComponentInChildren<Camera>();
+        }
+
+        // Tira a bala da câmera
+        Vector3 spawnPos = playerCamera.transform.position + playerCamera.transform.forward * 0.5f;
+
+        // Rotaciona o cilindro para ficar deitado na direção do tiro
+        Quaternion bulletRotation = Quaternion.FromToRotation(Vector3.up, playerCamera.transform.forward);
+        GameObject bullet = Instantiate(bulletPrefab, spawnPos, bulletRotation);
+
         Rigidbody bulletRb = bullet.GetComponent<Rigidbody>();
 
         if (bulletRb == null)
             bulletRb = bullet.AddComponent<Rigidbody>();
 
-        bulletRb.linearVelocity = shootPoint.forward * bulletSpeed;
+        bulletRb.velocity = playerCamera.transform.forward * bulletSpeed;
 
         Bullet bulletScript = bullet.GetComponent<Bullet>();
         if (bulletScript == null)
             bulletScript = bullet.AddComponent<Bullet>();
 
         balasNoPente--;
+
+        // AVISAR INIMIGOS DO TIRO
+        Enemy[] allEnemies = FindObjectsOfType<Enemy>();
+        foreach (Enemy enemy in allEnemies)
+        {
+            enemy.OnPlayerShot(playerCamera.transform.position);
+        }
+
         lastShotTime = Time.time;
 
         Destroy(bullet, bulletLifetime);
@@ -126,7 +146,6 @@ public class Weapon : MonoBehaviour
             yield return null;
         }
 
-        // Garantir que volta exatamente para originalPosition
         transform.localPosition = originalPosition;
 
         // Completar o pente

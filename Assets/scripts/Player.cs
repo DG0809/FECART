@@ -18,6 +18,11 @@ public class Player : MonoBehaviour
     {
         rb = GetComponent<Rigidbody>();
 
+        if (rb != null)
+        {
+            rb.constraints = RigidbodyConstraints.FreezeRotation;
+        }
+
         if (handPoint == null)
         {
             GameObject hand = new GameObject("HandPoint");
@@ -93,11 +98,14 @@ public class Player : MonoBehaviour
         float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
         float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
 
-        transform.Rotate(Vector3.up * mouseX);
+        // Rotação horizontal do player
+        Vector3 playerRotation = transform.eulerAngles;
+        playerRotation.y += mouseX;
+        transform.eulerAngles = playerRotation;
 
+        // Rotação vertical só da camera
         rotationX -= mouseY;
         rotationX = Mathf.Clamp(rotationX, -90f, 90f);
-
         cameraTransform.localRotation = Quaternion.Euler(rotationX, 0, 0);
     }
 

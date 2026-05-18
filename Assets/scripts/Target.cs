@@ -3,6 +3,17 @@ using UnityEngine;
 public class Target : MonoBehaviour
 {
     [SerializeField] private int health = 30;
+    private Rigidbody rb;
+
+    private void Start()
+    {
+        rb = GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            rb.isKinematic = true;
+            rb.constraints = RigidbodyConstraints.FreezeAll;
+        }
+    }
 
     public void TakeDamage(int damage)
     {
