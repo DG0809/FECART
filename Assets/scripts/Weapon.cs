@@ -98,7 +98,7 @@ public class Weapon : MonoBehaviour
         if (bulletRb == null)
             bulletRb = bullet.AddComponent<Rigidbody>();
 
-        bulletRb.velocity = playerCamera.transform.forward * bulletSpeed;
+        bulletRb.linearVelocity = playerCamera.transform.forward * bulletSpeed;
 
         Bullet bulletScript = bullet.GetComponent<Bullet>();
         if (bulletScript == null)

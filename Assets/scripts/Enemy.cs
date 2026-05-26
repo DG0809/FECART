@@ -29,7 +29,14 @@ public class Enemy : MonoBehaviour
     private void Start()
     {
         navMeshAgent = GetComponent<NavMeshAgent>();
-        playerTransform = FindObjectOfType<Player>().transform;
+
+        Player player = FindObjectOfType<Player>();
+
+        if (player != null)
+        {
+            playerTransform = player.transform;
+        }
+
         StartWandering();
     }
 
@@ -37,57 +44,60 @@ public class Enemy : MonoBehaviour
     {
         CheckPlayerVisibility();
         UpdateBehavior();
-        DrawFieldOfView();
     }
 
     private void CheckPlayerVisibility()
     {
         if (playerTransform == null) return;
 
-        Vector3 directionToPlayer = (playerTransform.position - transform.position).normalized;
-        float distanceToPlayer = Vector3.Distance(transform.position, playerTransform.position);
+        Vector3 directionToPlayer =
+            (playerTransform.position - transform.position).normalized;
 
-        // Verificar se o player está dentro do raio de visão
+        float distanceToPlayer =
+            Vector3.Distance(transform.position, playerTransform.position);
+
+        // Fora do raio
         if (distanceToPlayer > viewRadius)
         {
-            if (isChasing)
-            {
-                isChasing = false;
-                isInvestigating = true;
-                investigateTimer = waitTimeAfterLose;
-            }
+            LosePlayer();
             return;
         }
 
-        // Verificar se o player está dentro do ângulo de visão
-        float angleToPlayer = Vector3.Angle(transform.forward, directionToPlayer);
+        // Fora do ângulo
+        float angleToPlayer =
+            Vector3.Angle(transform.forward, directionToPlayer);
+
         if (angleToPlayer > viewAngle / 2)
         {
-            if (isChasing)
-            {
-                isChasing = false;
-                isInvestigating = true;
-                investigateTimer = waitTimeAfterLose;
-            }
+            LosePlayer();
             return;
         }
 
-        // Verificar se há obstáculo bloqueando a visão
-        if (Physics.Raycast(transform.position + Vector3.up * 0.6f, directionToPlayer, distanceToPlayer, obstacleLayer))
+        // Obstáculo bloqueando visão
+        if (Physics.Raycast(
+            transform.position + Vector3.up * 0.6f,
+            directionToPlayer,
+            distanceToPlayer,
+            obstacleLayer))
         {
-            if (isChasing)
-            {
-                isChasing = false;
-                isInvestigating = true;
-                investigateTimer = waitTimeAfterLose;
-            }
+            LosePlayer();
             return;
         }
 
-        // Player visto!
+        // Player visto
         isChasing = true;
         isInvestigating = false;
         lastKnownPlayerPosition = playerTransform.position;
+    }
+
+    private void LosePlayer()
+    {
+        if (isChasing)
+        {
+            isChasing = false;
+            isInvestigating = true;
+            investigateTimer = waitTimeAfterLose;
+        }
     }
 
     private void UpdateBehavior()
@@ -128,15 +138,18 @@ public class Enemy : MonoBehaviour
 
     private void Wander()
     {
-        // Se chegou perto do destino, escolher um novo
-        if (!navMeshAgent.hasPath || navMeshAgent.remainingDistance < stoppingDistance)
+        if (!navMeshAgent.hasPath ||
+            navMeshAgent.remainingDistance < stoppingDistance)
         {
             waitTimer -= Time.deltaTime;
 
             if (waitTimer <= 0)
             {
-                Vector3 randomDestination = GetRandomNavMeshPosition(transform.position, wanderRange);
+                Vector3 randomDestination =
+                    GetRandomNavMeshPosition(transform.position, wanderRange);
+
                 navMeshAgent.SetDestination(randomDestination);
+
                 waitTimer = waitTimeAtDestination;
             }
         }
@@ -144,20 +157,30 @@ public class Enemy : MonoBehaviour
 
     private void StartWandering()
     {
-        Vector3 randomDestination = GetRandomNavMeshPosition(transform.position, wanderRange);
+        Vector3 randomDestination =
+            GetRandomNavMeshPosition(transform.position, wanderRange);
+
         navMeshAgent.SetDestination(randomDestination);
+
         waitTimer = waitTimeAtDestination;
     }
 
     private Vector3 GetRandomNavMeshPosition(Vector3 center, float range)
     {
-        Vector3 randomDirection = Random.insideUnitSphere * range;
+        Vector3 randomDirection =
+            Random.insideUnitSphere * range;
+
         randomDirection += center;
 
         NavMeshHit hit;
+
         Vector3 finalPosition = center;
 
-        if (NavMesh.SamplePosition(randomDirection, out hit, range, NavMesh.AllAreas))
+        if (NavMesh.SamplePosition(
+            randomDirection,
+            out hit,
+            range,
+            NavMesh.AllAreas))
         {
             finalPosition = hit.position;
         }
@@ -165,36 +188,56 @@ public class Enemy : MonoBehaviour
         return finalPosition;
     }
 
-    private void DrawFieldOfView()
+    // GIZMOS
+    private void OnDrawGizmosSelected()
     {
         // Raio de visão
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, viewRadius);
 
-        // Linhas laterais do ângulo de visão
-        Vector3 leftBoundary = Quaternion.Euler(0, -viewAngle / 2, 0) * transform.forward * viewRadius;
-        Vector3 rightBoundary = Quaternion.Euler(0, viewAngle / 2, 0) * transform.forward * viewRadius;
+        // Linhas laterais
+        Vector3 leftBoundary =
+            Quaternion.Euler(0, -viewAngle / 2, 0) *
+            transform.forward *
+            viewRadius;
+
+        Vector3 rightBoundary =
+            Quaternion.Euler(0, viewAngle / 2, 0) *
+            transform.forward *
+            viewRadius;
 
         Gizmos.color = Color.green;
-        Gizmos.DrawLine(transform.position, transform.position + leftBoundary);
-        Gizmos.DrawLine(transform.position, transform.position + rightBoundary);
 
-        // Linha até o player se visto
+        Gizmos.DrawLine(
+            transform.position,
+            transform.position + leftBoundary);
+
+        Gizmos.DrawLine(
+            transform.position,
+            transform.position + rightBoundary);
+
+        // Linha até player
         if (isChasing && playerTransform != null)
         {
             Gizmos.color = Color.red;
-            Gizmos.DrawLine(transform.position, playerTransform.position);
+
+            Gizmos.DrawLine(
+                transform.position,
+                playerTransform.position);
         }
 
-        // Linha até última posição conhecida se investigando
+        // Investigando
         if (isInvestigating)
         {
             Gizmos.color = Color.cyan;
-            Gizmos.DrawLine(transform.position, lastKnownPlayerPosition);
+
+            Gizmos.DrawLine(
+                transform.position,
+                lastKnownPlayerPosition);
         }
     }
 
-    // Chamada quando o player atira
+    // Quando o player atira
     public void OnPlayerShot(Vector3 shotPosition)
     {
         if (!isChasing)
