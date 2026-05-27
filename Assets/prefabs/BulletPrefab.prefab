@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 299894775135343975}
   - component: {fileID: 458908690916143115}
   - component: {fileID: 5134116222457377782}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: BulletPrefab
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -128,6 +128,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2bb623fd4d4fe554c82eaa0735bfb219, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Bullet
+  damageAmount: 10
 --- !u!54 &5134116222457377782
 Rigidbody:
   m_ObjectHideFlags: 0
