@@ -147,7 +147,7 @@ Transform:
   m_GameObject: {fileID: 122875427}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 1.24, y: 2, z: -9.46}
+  m_LocalPosition: {x: 1.24, y: 1.42495, z: -9.46}
   m_LocalScale: {x: 0.42278, y: 2.9585, z: 16.457018}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -532,13 +532,14 @@ MonoBehaviour:
   chaseAngularSpeed: 120
   viewRadius: 15
   viewAngle: 120
+  playerLayer:
+    serializedVersion: 2
+    m_Bits: 0
   obstacleLayer:
     serializedVersion: 2
     m_Bits: 0
   suspicionDuration: 5
   chaseLoseTime: 4
-  wallAvoidanceDistance: 1.5
-  wallAvoidanceRayCount: 5
   health: 30
 --- !u!4 &350424182
 Transform:
@@ -661,13 +662,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 395721441}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: -2.3503, y: 2, z: -2.03}
-  m_LocalScale: {x: 0.42278, y: 2.9585, z: 10.539913}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -4.16, y: 1.42495, z: -3.4244099}
+  m_LocalScale: {x: 0.42278, y: 2.9585, z: 3.9286}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 860556093}
-  m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
@@ -902,7 +903,7 @@ Transform:
   m_GameObject: {fileID: 456835656}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 1.24, y: 2, z: 6.9}
+  m_LocalPosition: {x: 1.24, y: 1.42495, z: 6.9}
   m_LocalScale: {x: 0.42278, y: 2.9585, z: 16.457018}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1014,7 +1015,7 @@ Transform:
   m_GameObject: {fileID: 606037015}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -6.94, y: 2, z: -1.5821}
+  m_LocalPosition: {x: -6.94, y: 1.42495, z: -1.5821}
   m_LocalScale: {x: 0.42278, y: 2.9585, z: 16.457018}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1245,8 +1246,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
   moveSpeed: 5
   mouseSensitivity: 2
-  mainCamera: {fileID: 330585545}
   handPoint: {fileID: 1132372765}
+  mainCamera: {fileID: 330585545}
 --- !u!54 &751823720
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -1269,7 +1270,7 @@ Rigidbody:
     m_Bits: 0
   m_ImplicitCom: 1
   m_ImplicitTensor: 1
-  m_UseGravity: 1
+  m_UseGravity: 0
   m_IsKinematic: 0
   m_Interpolate: 0
   m_Constraints: 112
@@ -1363,7 +1364,7 @@ Transform:
   m_GameObject: {fileID: 751823718}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 4.74, y: 1.99, z: 0.67}
+  m_LocalPosition: {x: 0.35356, y: 0.24749, z: 0.67}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1557,70 +1558,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &832668633
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 832668635}
-  - component: {fileID: 832668634}
-  m_Layer: 0
-  m_Name: aiRoot
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &832668634
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 832668633}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7a5ac11cc976e418e8d13136b07e1f52, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.AI.Navigation::Unity.AI.Navigation.NavMeshSurface
-  m_SerializedVersion: 0
-  m_AgentTypeID: 0
-  m_CollectObjects: 0
-  m_Size: {x: 10, y: 10, z: 10}
-  m_Center: {x: 0, y: 2, z: 0}
-  m_LayerMask:
-    serializedVersion: 2
-    m_Bits: 8
-  m_UseGeometry: 0
-  m_DefaultArea: 0
-  m_GenerateLinks: 0
-  m_IgnoreNavMeshAgent: 1
-  m_IgnoreNavMeshObstacle: 1
-  m_OverrideTileSize: 0
-  m_TileSize: 256
-  m_OverrideVoxelSize: 0
-  m_VoxelSize: 0.1
-  m_MinRegionArea: 2
-  m_NavMeshData: {fileID: 23800000, guid: c6f132c732d966348b37eede086feabf, type: 2}
-  m_BuildHeightMesh: 0
---- !u!4 &832668635
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 832668633}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.66742, y: 0, z: 3.83104}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &860556092
 GameObject:
   m_ObjectHideFlags: 0
@@ -1807,7 +1744,7 @@ GameObject:
   - component: {fileID: 951207560}
   - component: {fileID: 951207559}
   - component: {fileID: 951207558}
-  m_Layer: 8
+  m_Layer: 0
   m_Name: Enemy
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1822,7 +1759,7 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 951207556}
   serializedVersion: 5
-  m_Mass: 80
+  m_Mass: 1
   m_LinearDamping: 0
   m_AngularDamping: 0.05
   m_CenterOfMass: {x: 0, y: 0, z: 0}
@@ -1860,8 +1797,8 @@ CapsuleCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.4
-  m_Height: 1.8
+  m_Radius: 0.5
+  m_Height: 2
   m_Direction: 1
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!23 &951207560
@@ -1930,7 +1867,7 @@ Transform:
   m_GameObject: {fileID: 951207556}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 2.74, z: 0}
+  m_LocalPosition: {x: 0, y: 1, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2041,7 +1978,7 @@ Transform:
   m_GameObject: {fileID: 1340511292}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 9.17, y: 2, z: -1.5821}
+  m_LocalPosition: {x: 9.17, y: 1.42495, z: -1.5821}
   m_LocalScale: {x: 0.42278, y: 2.9585, z: 16.457018}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2137,6 +2074,7 @@ GameObject:
   - component: {fileID: 1533864768}
   - component: {fileID: 1533864767}
   - component: {fileID: 1533864766}
+  - component: {fileID: 1533864765}
   m_Layer: 3
   m_Name: Cube (1)
   m_TagString: Untagged
@@ -2144,6 +2082,38 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &1533864765
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1533864764}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a5ac11cc976e418e8d13136b07e1f52, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.AI.Navigation::Unity.AI.Navigation.NavMeshSurface
+  m_SerializedVersion: 0
+  m_AgentTypeID: 0
+  m_CollectObjects: 0
+  m_Size: {x: 10, y: 10, z: 10}
+  m_Center: {x: 0, y: 2, z: 0}
+  m_LayerMask:
+    serializedVersion: 2
+    m_Bits: 8
+  m_UseGeometry: 0
+  m_DefaultArea: 0
+  m_GenerateLinks: 0
+  m_IgnoreNavMeshAgent: 1
+  m_IgnoreNavMeshObstacle: 1
+  m_OverrideTileSize: 0
+  m_TileSize: 256
+  m_OverrideVoxelSize: 0
+  m_VoxelSize: 0.01
+  m_MinRegionArea: 2
+  m_NavMeshData: {fileID: 23800000, guid: 1c19c1b75a0ca364b9f3adf9bc2a24fc, type: 2}
+  m_BuildHeightMesh: 0
 --- !u!65 &1533864766
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -2231,7 +2201,7 @@ Transform:
   m_GameObject: {fileID: 1533864764}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.2463, y: 0, z: 4.1485}
+  m_LocalPosition: {x: -0.2463, y: -1.25, z: 4.1485}
   m_LocalScale: {x: 15.137995, y: 0.2301, z: 15.53795}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2349,7 +2319,7 @@ Transform:
   m_GameObject: {fileID: 1745905584}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 5.28, y: 2, z: 5.125}
+  m_LocalPosition: {x: 0.65663, y: 0, z: 5.125}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -2483,4 +2453,3 @@ SceneRoots:
   - {fileID: 1533864769}
   - {fileID: 350424182}
   - {fileID: 860556093}
-  - {fileID: 832668635}

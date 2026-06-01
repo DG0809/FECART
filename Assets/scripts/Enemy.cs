@@ -4,19 +4,13 @@ using UnityEngine.AI;
 public class Enemy : MonoBehaviour
 {
     private enum EnemyState { Patrol, Suspicion, Chase }
+    private EnemyState currentState = EnemyState.Patrol;
 
-    [Header("Estados")]
-    [SerializeField] private EnemyState currentState = EnemyState.Patrol;
-
-    [Header("Movimento - Patrulha")]
+    [Header("Movimento")]
     [SerializeField] private float patrolSpeed = 2f;
-    [SerializeField] private float patrolAngularSpeed = 60f;
-    [SerializeField] private float patrolWaitTime = 3f;
-    [SerializeField] private float wanderRange = 25f;
-
-    [Header("Movimento - Perseguição")]
     [SerializeField] private float chaseSpeed = 5.5f;
-    [SerializeField] private float chaseAngularSpeed = 120f;
+    [SerializeField] private float wanderRange = 25f;
+    [SerializeField] private float patrolWaitTime = 3f;
 
     [Header("Visão")]
     [SerializeField] private float viewRadius = 12f;
@@ -28,29 +22,30 @@ public class Enemy : MonoBehaviour
     [SerializeField] private float suspicionDuration = 5f;
     [SerializeField] private float chaseLoseTime = 4f;
 
-    [Header("Vida")]
-    [SerializeField] private int health = 30;
-
     private NavMeshAgent navMeshAgent;
     private Transform playerTransform;
     private Vector3 lastKnownPlayerPos;
     private float stateTimer = 0f;
     private float chaseTimer = 0f;
+    private int health = 30;
     private bool isDead = false;
 
     private void Start()
     {
         navMeshAgent = GetComponent<NavMeshAgent>();
+        playerTransform = FindObjectOfType<Player>().transform;
 
-        Player player = FindObjectOfType<Player>();
-        if (player != null)
+        if (navMeshAgent == null)
         {
-            playerTransform = player.transform;
+            Debug.LogError("Enemy precisa de NavMeshAgent!");
+            return;
         }
 
         navMeshAgent.speed = patrolSpeed;
-        navMeshAgent.angularSpeed = patrolAngularSpeed;
+        navMeshAgent.angularSpeed = 60f;
         navMeshAgent.stoppingDistance = 0.5f;
+        navMeshAgent.avoidancePriority = 50;
+        navMeshAgent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
 
         StartPatrol();
     }
@@ -70,11 +65,9 @@ public class Enemy : MonoBehaviour
             case EnemyState.Patrol:
                 UpdatePatrol();
                 break;
-
             case EnemyState.Suspicion:
                 UpdateSuspicion();
                 break;
-
             case EnemyState.Chase:
                 UpdateChase();
                 break;
@@ -83,10 +76,9 @@ public class Enemy : MonoBehaviour
 
     private void UpdatePatrol()
     {
-        if (!navMeshAgent.hasPath || navMeshAgent.remainingDistance < 0.5f)
+        if (!navMeshAgent.hasPath || navMeshAgent.remainingDistance < navMeshAgent.stoppingDistance)
         {
             stateTimer -= Time.deltaTime;
-
             if (stateTimer <= 0)
             {
                 Vector3 randomPos = GetRandomNavMeshPosition(transform.position, wanderRange);
@@ -98,10 +90,9 @@ public class Enemy : MonoBehaviour
 
     private void UpdateSuspicion()
     {
-        if (!navMeshAgent.hasPath || navMeshAgent.remainingDistance < 0.5f)
+        if (!navMeshAgent.hasPath || navMeshAgent.remainingDistance < navMeshAgent.stoppingDistance)
         {
             stateTimer -= Time.deltaTime;
-
             if (stateTimer <= 0)
             {
                 StartPatrol();
@@ -111,94 +102,60 @@ public class Enemy : MonoBehaviour
 
     private void UpdateChase()
     {
-        if (playerTransform == null) return;
-
-        navMeshAgent.SetDestination(playerTransform.position);
-
-        if (CanSeePlayer())
+        if (playerTransform != null)
         {
-            chaseTimer = chaseLoseTime;
-            lastKnownPlayerPos = playerTransform.position;
+            navMeshAgent.SetDestination(playerTransform.position);
         }
-        else
-        {
-            chaseTimer -= Time.deltaTime;
 
-            if (chaseTimer <= 0)
-            {
-                EnterSuspicion(lastKnownPlayerPos);
-            }
+        chaseTimer -= Time.deltaTime;
+        if (chaseTimer <= 0)
+        {
+            currentState = EnemyState.Suspicion;
+            lastKnownPlayerPos = playerTransform.position;
+            navMeshAgent.SetDestination(lastKnownPlayerPos);
+            navMeshAgent.speed = patrolSpeed;
+            stateTimer = suspicionDuration;
         }
     }
 
     private void CheckPlayerVisibility()
     {
-        if (playerTransform == null) return;
-        if (currentState == EnemyState.Chase) return;
+        if (playerTransform == null || currentState == EnemyState.Chase) return;
 
-        if (CanSeePlayer())
-        {
-            EnterChase();
-        }
-    }
+        Vector3 directionToPlayer = (playerTransform.position - transform.position).normalized;
+        float distanceToPlayer = Vector3.Distance(transform.position, playerTransform.position);
 
-    private bool CanSeePlayer()
-    {
-        if (playerTransform == null) return false;
-
-        Vector3 eyePosition = transform.position + Vector3.up * 0.6f;
-        Vector3 targetPosition = playerTransform.position + Vector3.up * 0.6f;
-
-        Vector3 directionToPlayer = (targetPosition - eyePosition).normalized;
-        float distanceToPlayer = Vector3.Distance(eyePosition, targetPosition);
-
-        if (distanceToPlayer > viewRadius) return false;
+        if (distanceToPlayer > viewRadius) return;
 
         float angleToPlayer = Vector3.Angle(transform.forward, directionToPlayer);
-        if (angleToPlayer > viewAngle / 2f) return false;
+        if (angleToPlayer > viewAngle / 2) return;
 
-        if (Physics.Raycast(eyePosition, directionToPlayer, distanceToPlayer, obstacleLayer))
-        {
-            return false;
-        }
+        if (Physics.Raycast(transform.position + Vector3.up * 0.6f, directionToPlayer, distanceToPlayer, obstacleLayer))
+            return;
 
-        return true;
+        EnterChase();
     }
 
     private void EnterChase()
     {
+        if (currentState == EnemyState.Chase) return;
+
         currentState = EnemyState.Chase;
-
         navMeshAgent.speed = chaseSpeed;
-        navMeshAgent.angularSpeed = chaseAngularSpeed;
-
+        navMeshAgent.angularSpeed = 120f;
         chaseTimer = chaseLoseTime;
         lastKnownPlayerPos = playerTransform.position;
-    }
 
-    private void EnterSuspicion(Vector3 position)
-    {
-        currentState = EnemyState.Suspicion;
-
-        navMeshAgent.speed = patrolSpeed;
-        navMeshAgent.angularSpeed = patrolAngularSpeed;
-
-        lastKnownPlayerPos = position;
-        navMeshAgent.SetDestination(lastKnownPlayerPos);
-
-        stateTimer = suspicionDuration;
+        Debug.Log("Inimigo em PERSEGUIÇÃO!");
     }
 
     private void StartPatrol()
     {
         currentState = EnemyState.Patrol;
-
         navMeshAgent.speed = patrolSpeed;
-        navMeshAgent.angularSpeed = patrolAngularSpeed;
-
+        navMeshAgent.angularSpeed = 60f;
         Vector3 randomPos = GetRandomNavMeshPosition(transform.position, wanderRange);
         navMeshAgent.SetDestination(randomPos);
-
         stateTimer = patrolWaitTime;
     }
 
@@ -208,51 +165,36 @@ public class Enemy : MonoBehaviour
         randomDirection += center;
 
         NavMeshHit hit;
-
         if (NavMesh.SamplePosition(randomDirection, out hit, range, NavMesh.AllAreas))
         {
             return hit.position;
         }
-
         return center;
     }
 
     public void OnPlayerShot(Vector3 shotPosition)
     {
-        if (isDead) return;
         if (currentState == EnemyState.Chase) return;
 
-        EnterSuspicion(shotPosition);
+        currentState = EnemyState.Suspicion;
+        lastKnownPlayerPos = shotPosition;
+        navMeshAgent.SetDestination(lastKnownPlayerPos);
+        navMeshAgent.speed = patrolSpeed;
+        stateTimer = suspicionDuration;
     }
 
     public void TakeDamage(int damage)
     {
-        if (isDead) return;
-
         health -= damage;
-
-        if (health <= 0)
-        {
-            Die();
-        }
+        if (health <= 0) Die();
     }
 
     private void Die()
     {
         isDead = true;
-
-        if (navMeshAgent != null)
-        {
-            navMeshAgent.enabled = false;
-        }
-
-        Collider col = GetComponent<Collider>();
-        if (col != null)
-        {
-            col.enabled = false;
-        }
-
-        Destroy(gameObject);
+        navMeshAgent.enabled = false;
+        GetComponent<Collider>().enabled = false;
+        Destroy(gameObject, 0.1f);
     }
 
     private void OnDrawGizmosSelected()
@@ -260,31 +202,18 @@ public class Enemy : MonoBehaviour
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, viewRadius);
 
-        Vector3 leftBoundary =
-            Quaternion.Euler(0, -viewAngle / 2f, 0) * transform.forward * viewRadius;
-
-        Vector3 rightBoundary =
-            Quaternion.Euler(0, viewAngle / 2f, 0) * transform.forward * viewRadius;
+        Vector3 leftBoundary = Quaternion.Euler(0, -viewAngle / 2, 0) * transform.forward * viewRadius;
+        Vector3 rightBoundary = Quaternion.Euler(0, viewAngle / 2, 0) * transform.forward * viewRadius;
 
         Gizmos.color = Color.green;
         Gizmos.DrawLine(transform.position, transform.position + leftBoundary);
         Gizmos.DrawLine(transform.position, transform.position + rightBoundary);
 
-        if (currentState == EnemyState.Chase && playerTransform != null)
+        if (currentState == EnemyState.Chase)
         {
             Gizmos.color = Color.red;
-            Gizmos.DrawLine(transform.position, playerTransform.position);
+            if (playerTransform != null)
+                Gizmos.DrawLine(transform.position, playerTransform.position);
         }
-        else if (currentState == EnemyState.Suspicion)
-        {
-            Gizmos.color = Color.cyan;
-            Gizmos.DrawLine(transform.position, lastKnownPlayerPos);
-            Gizmos.DrawWireSphere(lastKnownPlayerPos, 0.3f);
-        }
-    }
-
-    public bool IsChasing()
-    {
-        return currentState == EnemyState.Chase;
     }
 }

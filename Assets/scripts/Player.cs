@@ -18,10 +18,8 @@ public class Player : MonoBehaviour
     {
         rb = GetComponent<Rigidbody>();
 
-        if (rb != null)
-        {
-            rb.constraints = RigidbodyConstraints.FreezeRotation;
-        }
+        // NUNCA mexer em Rigidbody configuraï¿½ï¿½es aqui
+        // Se houver problema, ï¿½ CONFIGURATION, nï¿½o script
 
         if (handPoint == null)
         {
@@ -62,7 +60,10 @@ public class Player : MonoBehaviour
 
     private void FixedUpdate()
     {
-        Move();
+        if (rb != null)
+        {
+            Move();
+        }
     }
 
     private void HandleInput()
@@ -84,13 +85,12 @@ public class Player : MonoBehaviour
 
     private void Move()
     {
-        Vector3 velocity = new Vector3(
-            moveDirection.x * moveSpeed,
-            rb.linearVelocity.y,
-            moveDirection.z * moveSpeed
-        );
+        // Manter velocidade Y (gravidade)
+        // Sï¿½ mudar X e Z
+        Vector3 newVelocity = moveDirection * moveSpeed;
+        newVelocity.y = rb.linearVelocity.y; // Preservar gravidade
 
-        rb.linearVelocity = velocity;
+        rb.linearVelocity = newVelocity;
     }
 
     private void HandleMouse()
@@ -98,12 +98,12 @@ public class Player : MonoBehaviour
         float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
         float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
 
-        // Rotação horizontal do player
+        // Rotaï¿½ï¿½o horizontal
         Vector3 playerRotation = transform.eulerAngles;
         playerRotation.y += mouseX;
         transform.eulerAngles = playerRotation;
 
-        // Rotação vertical só da camera
+        // Rotaï¿½ï¿½o vertical da cï¿½mera
         rotationX -= mouseY;
         rotationX = Mathf.Clamp(rotationX, -90f, 90f);
         cameraTransform.localRotation = Quaternion.Euler(rotationX, 0, 0);
