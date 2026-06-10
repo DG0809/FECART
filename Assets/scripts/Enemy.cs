@@ -1,26 +1,36 @@
 ﻿using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
 /// <summary>
-/// Controlador de inimigo com IA baseada em estados.
-/// Estados: Patrol → Investigate → Chase
+/// Controlador de inimigo com IA baseada em estados para ambiente interno (casa).
 ///
-/// Requisitos de configuração no Inspector:
-///   - NavMeshAgent  (obrigatório)
-///   - CapsuleCollider (obrigatório)
-///   - Rigidbody com IsKinematic = true, UseGravity = false (opcional, apenas se precisar de colisão física extra)
+/// Funcionalidades:
+///   - Patrulha por waypoints manuais ou pontos aleatórios validados
+///   - Investigação com DoorPoints para transitar entre cômodos
+///   - Perseguição via NavMeshAgent
+///   - Validação de destino: rejeita pontos próximos de paredes
+///   - LookAround que verifica direções livres antes de girar
+///   - Raycasts frontais, laterais e diagonais para evitar paredes
+///   - Gizmos completos para debug visual no Editor
 ///
-/// Layers necessárias:
-///   - playerLayer   : layer do objeto Player
-///   - obstacleLayer : layer de paredes e obstáculos que bloqueiam visão
+/// Componentes obrigatórios no GameObject:
+///   - NavMeshAgent
+///   - CapsuleCollider
+///   - Rigidbody (IsKinematic = true, UseGravity = false) — opcional
+///
+/// Tags e Layers necessárias:
+///   - Tag "Player" no objeto do jogador
+///   - Layer "Obstacle" nas paredes (campo wallLayer)
+///   - Layer "Player" no jogador (campo playerLayer)
 /// </summary>
 [RequireComponent(typeof(NavMeshAgent))]
 public class Enemy : MonoBehaviour
 {
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
     // ENUM DE ESTADOS
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
 
     public enum EnemyState
     {
@@ -29,83 +39,127 @@ public class Enemy : MonoBehaviour
         Chase
     }
 
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
     // INSPECTOR — VISÃO
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
 
     [Header("Visão")]
     [Tooltip("Distância máxima de detecção do Player.")]
-    [SerializeField] private float viewRadius = 15f;
+    [SerializeField] private float viewRadius = 12f;
 
-    [Tooltip("Ângulo total do cone de visão (em graus).")]
-    [SerializeField] private float viewAngle = 120f;
+    [Tooltip("Ângulo total do cone de visão em graus.")]
+    [SerializeField] private float viewAngle = 110f;
 
-    [Tooltip("Layer do Player.")]
+    [Tooltip("Layer do objeto Player.")]
     [SerializeField] private LayerMask playerLayer;
 
-    [Tooltip("Layer de paredes e obstáculos que bloqueiam a linha de visão.")]
+    [Tooltip("Layer de paredes e obstáculos que bloqueiam a visão.")]
     [SerializeField] private LayerMask obstacleLayer;
 
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
+    // INSPECTOR — EVITAR PAREDES
+    // ═══════════════════════════════════════════════
+
+    [Header("Evitar Paredes")]
+    [Tooltip("Layer das paredes usada nos raycasts de proximidade.")]
+    [SerializeField] private LayerMask wallLayer;
+
+    [Tooltip("Distância de detecção de parede nos raycasts laterais e frontal.")]
+    [SerializeField] private float wallCheckDistance = 1.2f;
+
+    [Tooltip("Raio mínimo seguro entre o destino escolhido e qualquer parede. " +
+             "Destinos mais próximos do que este valor são rejeitados.")]
+    [SerializeField] private float wallSafeDistance = 0.8f;
+
+    [Tooltip("Raio da esfera usada em Physics.CheckSphere para validar destinos.")]
+    [SerializeField] private float destinationCheckRadius = 0.6f;
+
+    // ═══════════════════════════════════════════════
     // INSPECTOR — PATRULHA
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
 
-    [Header("Patrulha")]
-    [Tooltip("Raio máximo ao redor do ponto de spawn para escolher destinos aleatórios.")]
-    [SerializeField] private float wanderRadius = 20f;
+    [Header("Patrulha — Waypoints")]
+    [Tooltip("Lista de pontos de patrulha manuais. Se vazia, usa pontos aleatórios.")]
+    public List<Transform> patrolPoints = new List<Transform>();
 
+    [Tooltip("Se verdadeiro, percorre os patrolPoints em ordem. " +
+             "Se falso, escolhe aleatoriamente.")]
+    [SerializeField] private bool patrolInOrder = true;
+
+    [Header("Patrulha — Movimento")]
     [Tooltip("Velocidade durante a patrulha.")]
-    [SerializeField] private float patrolSpeed = 2.5f;
+    [SerializeField] private float patrolSpeed = 2.2f;
 
-    [Tooltip("Tempo mínimo de espera ao chegar em um ponto de patrulha.")]
-    [SerializeField] private float minWaitAtWaypoint = 1.5f;
+    [Tooltip("Raio de busca para pontos aleatórios (usado quando patrolPoints está vazio).")]
+    [SerializeField] private float wanderRadius = 18f;
 
-    [Tooltip("Tempo máximo de espera ao chegar em um ponto de patrulha.")]
-    [SerializeField] private float maxWaitAtWaypoint = 4f;
+    [Tooltip("Tempo mínimo de espera ao chegar em um waypoint.")]
+    [SerializeField] private float minWaitAtWaypoint = 2f;
 
-    [Tooltip("Velocidade angular usada ao olhar para os lados durante a patrulha.")]
-    [SerializeField] private float lookAroundSpeed = 60f;
+    [Tooltip("Tempo máximo de espera ao chegar em um waypoint.")]
+    [SerializeField] private float maxWaitAtWaypoint = 5f;
 
-    // ─────────────────────────────────────────────
+    [Tooltip("Velocidade angular ao olhar para os lados (graus/segundo).")]
+    [SerializeField] private float lookAroundSpeed = 55f;
+
+    [Tooltip("Ângulo máximo de rotação ao olhar para os lados (cada direção).")]
+    [SerializeField] private float maxLookAngle = 70f;
+
+    // ═══════════════════════════════════════════════
+    // INSPECTOR — PORTAS (DOORPOINTS)
+    // ═══════════════════════════════════════════════
+
+    [Header("Portas — DoorPoints")]
+    [Tooltip("Lista de Transforms posicionados no centro de cada porta da casa. " +
+             "O inimigo usa o DoorPoint mais próximo ao destino ao trocar de cômodo.")]
+    public List<Transform> doorPoints = new List<Transform>();
+
+    [Tooltip("Se verdadeiro, o inimigo tenta passar por DoorPoints ao investigar " +
+             "um destino em outro cômodo.")]
+    [SerializeField] private bool useDoorPoints = true;
+
+    [Tooltip("Distância máxima para considerar que um DoorPoint é relevante para o trajeto.")]
+    [SerializeField] private float doorPointRelevanceDistance = 8f;
+
+    // ═══════════════════════════════════════════════
     // INSPECTOR — PERSEGUIÇÃO
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
 
     [Header("Perseguição")]
-    [Tooltip("Velocidade durante a perseguição.")]
-    [SerializeField] private float chaseSpeed = 5.5f;
+    [SerializeField] private float chaseSpeed = 5.2f;
 
-    [Tooltip("Distância mínima para o inimigo parar ao perseguir o Player.")]
-    [SerializeField] private float attackRange = 1.5f;
+    [Tooltip("Distância em que o inimigo para de avançar (ataque/confronto).")]
+    [SerializeField] private float attackRange = 1.4f;
 
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
     // INSPECTOR — INVESTIGAÇÃO
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
 
     [Header("Investigação")]
-    [Tooltip("Velocidade ao correr para o ponto de investigação.")]
-    [SerializeField] private float investigateSpeed = 4f;
+    [SerializeField] private float investigateSpeed = 3.8f;
 
-    [Tooltip("Tempo total que o inimigo investiga antes de voltar à patrulha.")]
-    [SerializeField] private float investigateDuration = 6f;
+    [Tooltip("Tempo total de investigação antes de voltar à patrulha.")]
+    [SerializeField] private float investigateDuration = 8f;
 
-    [Tooltip("Raio de incerteza adicionado à posição do disparo (simula que o inimigo não sabe a posição exata).")]
-    [SerializeField] private float shotNoiseRadius = 3f;
+    [Tooltip("Raio de incerteza adicionado à posição do disparo.")]
+    [SerializeField] private float shotNoiseRadius = 2.5f;
 
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
     // REFERÊNCIAS PRIVADAS
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
 
     private NavMeshAgent agent;
     private Transform playerTransform;
     private Vector3 spawnPosition;
 
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
     // ESTADO INTERNO
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
 
     private EnemyState currentState = EnemyState.Patrol;
 
     // Patrol
+    private int currentPatrolIndex = 0;
     private bool isWaiting = false;
     private Coroutine patrolWaitCoroutine;
 
@@ -113,13 +167,16 @@ public class Enemy : MonoBehaviour
     private Vector3 lastKnownPosition;
     private float investigateTimer;
 
-    // Look Around (olhar para os lados)
+    // LookAround
     private bool isLookingAround = false;
     private Coroutine lookAroundCoroutine;
 
-    // ─────────────────────────────────────────────
+    // Cache para Gizmos de wall-check (atualizado no Update)
+    private bool wallFront, wallLeft, wallRight, wallDiagFL, wallDiagFR;
+
+    // ═══════════════════════════════════════════════
     // UNITY — INICIALIZAÇÃO
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
 
     private void Awake()
     {
@@ -129,93 +186,122 @@ public class Enemy : MonoBehaviour
 
     private void Start()
     {
-        // Busca o Player pela tag, evitando depender de um script específico.
         GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
         if (playerObj != null)
             playerTransform = playerObj.transform;
         else
-            Debug.LogWarning("[Enemy] Player não encontrado. Certifique-se que o objeto Player tem a tag 'Player'.");
+            Debug.LogWarning("[Enemy] Player não encontrado. Verifique a tag 'Player'.");
 
-        // Garante que o agente não suba paredes ou flutue por conta do NavMesh.
+        // Impede que o NavMeshAgent cause flutuação ou rotação indesejada.
         agent.updateRotation = true;
-        agent.updateUpAxis = false; // Impede rotação no eixo Y que poderia causar flutuação.
+        agent.updateUpAxis = false;
 
         EnterPatrol();
     }
 
     private void Update()
     {
+        UpdateWallSensors();
         CheckPlayerVisibility();
         UpdateStateMachine();
     }
 
-    // ─────────────────────────────────────────────
-    // DETECÇÃO DO PLAYER
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
+    // SENSORES DE PAREDE
+    // ═══════════════════════════════════════════════
 
     /// <summary>
-    /// Verifica se o Player está dentro do cone de visão e sem obstáculos no caminho.
-    /// Transiciona para Chase ou Investigate conforme o resultado.
+    /// Executa raycasts em cinco direções para detectar paredes próximas.
+    /// Os resultados são usados tanto em tempo real (para ajustar rotação)
+    /// quanto nos Gizmos para visualização no Editor.
     /// </summary>
+    private void UpdateWallSensors()
+    {
+        Vector3 pos = transform.position + Vector3.up * 0.5f;
+        Vector3 fwd = transform.forward;
+
+        wallFront = Physics.Raycast(pos, fwd, wallCheckDistance, wallLayer);
+        wallLeft = Physics.Raycast(pos, Quaternion.Euler(0f, -90f, 0f) * fwd, wallCheckDistance * 0.7f, wallLayer);
+        wallRight = Physics.Raycast(pos, Quaternion.Euler(0f, 90f, 0f) * fwd, wallCheckDistance * 0.7f, wallLayer);
+        wallDiagFL = Physics.Raycast(pos, Quaternion.Euler(0f, -45f, 0f) * fwd, wallCheckDistance * 0.9f, wallLayer);
+        wallDiagFR = Physics.Raycast(pos, Quaternion.Euler(0f, 45f, 0f) * fwd, wallCheckDistance * 0.9f, wallLayer);
+    }
+
+    /// <summary>
+    /// Verifica se uma direção específica está livre de paredes.
+    /// Usado pelo LookAround para não girar em direção a uma parede.
+    /// </summary>
+    private bool IsDirectionClear(Vector3 direction)
+    {
+        Vector3 origin = transform.position + Vector3.up * 0.5f;
+        return !Physics.Raycast(origin, direction.normalized, wallCheckDistance * 1.3f, wallLayer);
+    }
+
+    /// <summary>
+    /// Verifica se um ponto de destino está suficientemente longe de paredes.
+    /// Rejeita pontos colados em obstáculos.
+    /// </summary>
+    private bool IsDestinationSafe(Vector3 point)
+    {
+        // CheckSphere detecta qualquer collider de parede dentro do raio seguro
+        if (Physics.CheckSphere(point, destinationCheckRadius, wallLayer))
+            return false;
+
+        // Confirma com raycasts nas 4 direções cardeais a partir do ponto
+        Vector3 checkOrigin = point + Vector3.up * 0.5f;
+        Vector3[] directions = { Vector3.forward, Vector3.back, Vector3.left, Vector3.right };
+        foreach (Vector3 dir in directions)
+        {
+            if (Physics.Raycast(checkOrigin, dir, wallSafeDistance, wallLayer))
+                return false;
+        }
+
+        return true;
+    }
+
+    // ═══════════════════════════════════════════════
+    // DETECÇÃO DO PLAYER
+    // ═══════════════════════════════════════════════
+
     private void CheckPlayerVisibility()
     {
         if (playerTransform == null) return;
 
-        Vector3 origin = transform.position + Vector3.up * 0.6f; // Origem do raycast na altura dos "olhos"
+        Vector3 origin = transform.position + Vector3.up * 0.6f;
         Vector3 toPlayer = playerTransform.position - origin;
         float distance = toPlayer.magnitude;
         Vector3 toPlayerNorm = toPlayer.normalized;
 
-        // 1. Verificar distância
-        if (distance > viewRadius)
-        {
-            OnPlayerLost();
-            return;
-        }
+        if (distance > viewRadius) { OnPlayerLost(); return; }
 
-        // 2. Verificar ângulo do cone de visão
         float angle = Vector3.Angle(transform.forward, toPlayerNorm);
-        if (angle > viewAngle * 0.5f)
-        {
-            OnPlayerLost();
-            return;
-        }
+        if (angle > viewAngle * 0.5f) { OnPlayerLost(); return; }
 
-        // 3. Verificar linha de visão (paredes e obstáculos)
         if (Physics.Raycast(origin, toPlayerNorm, distance, obstacleLayer))
         {
             OnPlayerLost();
             return;
         }
 
-        // Player visível: iniciar perseguição
         OnPlayerSpotted();
     }
 
-    /// <summary>
-    /// Chamado quando o Player é avistado.
-    /// </summary>
     private void OnPlayerSpotted()
     {
         lastKnownPosition = playerTransform.position;
-
         if (currentState != EnemyState.Chase)
             EnterChase();
     }
 
-    /// <summary>
-    /// Chamado quando o Player sai do cone de visão.
-    /// </summary>
     private void OnPlayerLost()
     {
-        // Só transiciona se estava perseguindo.
         if (currentState == EnemyState.Chase)
             EnterInvestigate(lastKnownPosition);
     }
 
-    // ─────────────────────────────────────────────
-    // MÁQUINA DE ESTADOS — DESPACHANTE
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
+    // MÁQUINA DE ESTADOS
+    // ═══════════════════════════════════════════════
 
     private void UpdateStateMachine()
     {
@@ -227,13 +313,10 @@ public class Enemy : MonoBehaviour
         }
     }
 
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
     // ESTADO: PATROL
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
 
-    /// <summary>
-    /// Configura o inimigo para o estado de patrulha.
-    /// </summary>
     private void EnterPatrol()
     {
         currentState = EnemyState.Patrol;
@@ -241,64 +324,68 @@ public class Enemy : MonoBehaviour
         agent.stoppingDistance = 0.5f;
         isWaiting = false;
 
-        MoveToRandomWaypoint();
+        MoveToNextPatrolPoint();
     }
 
-    /// <summary>
-    /// Atualizado a cada frame enquanto o inimigo está em patrulha.
-    /// Quando chega ao destino, inicia a espera com olhar lateral.
-    /// </summary>
     private void UpdatePatrol()
     {
         if (isWaiting) return;
 
-        // Chegou ao destino?
         if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance)
         {
             float waitTime = Random.Range(minWaitAtWaypoint, maxWaitAtWaypoint);
-            patrolWaitCoroutine = StartCoroutine(WaitAndChooseNextWaypoint(waitTime));
+            patrolWaitCoroutine = StartCoroutine(WaitAtWaypoint(waitTime));
         }
     }
 
     /// <summary>
-    /// Escolhe um ponto aleatório válido na NavMesh e move o agente até lá.
+    /// Escolhe o próximo destino de patrulha.
+    /// Prioriza patrolPoints manuais; usa pontos aleatórios se a lista estiver vazia.
     /// </summary>
-    private void MoveToRandomWaypoint()
+    private void MoveToNextPatrolPoint()
     {
-        Vector3 destination = GetRandomNavMeshPoint(spawnPosition, wanderRadius);
-        agent.SetDestination(destination);
+        if (patrolPoints != null && patrolPoints.Count > 0)
+        {
+            // Waypoints manuais
+            Transform target = patrolInOrder
+                ? patrolPoints[currentPatrolIndex % patrolPoints.Count]
+                : patrolPoints[Random.Range(0, patrolPoints.Count)];
+
+            if (patrolInOrder)
+                currentPatrolIndex = (currentPatrolIndex + 1) % patrolPoints.Count;
+
+            agent.SetDestination(target.position);
+        }
+        else
+        {
+            // Ponto aleatório validado
+            Vector3 dest = GetSafeRandomNavMeshPoint(spawnPosition, wanderRadius);
+            agent.SetDestination(dest);
+        }
     }
 
-    /// <summary>
-    /// Aguarda um tempo, olha para os lados simulando inspeção e depois escolhe o próximo waypoint.
-    /// </summary>
-    private IEnumerator WaitAndChooseNextWaypoint(float waitTime)
+    private IEnumerator WaitAtWaypoint(float waitTime)
     {
         isWaiting = true;
-        agent.ResetPath(); // Para o agente no lugar
+        agent.ResetPath();
 
-        // Olhar para os lados enquanto espera
         lookAroundCoroutine = StartCoroutine(LookAround(waitTime));
         yield return new WaitForSeconds(waitTime);
 
         isWaiting = false;
 
-        // Se ainda estiver em patrulha, escolhe novo destino
         if (currentState == EnemyState.Patrol)
-            MoveToRandomWaypoint();
+            MoveToNextPatrolPoint();
     }
 
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
     // ESTADO: INVESTIGATE
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
 
-    /// <summary>
-    /// Configura o inimigo para o estado de investigação com base em uma posição alvo.
-    /// </summary>
     private void EnterInvestigate(Vector3 targetPosition)
     {
-        // Cancela coroutines de patrulha pendentes
         CancelPatrolCoroutines();
+        CancelLookAround();
 
         currentState = EnemyState.Investigate;
         agent.speed = investigateSpeed;
@@ -306,25 +393,59 @@ public class Enemy : MonoBehaviour
         lastKnownPosition = targetPosition;
         investigateTimer = investigateDuration;
 
-        agent.SetDestination(lastKnownPosition);
+        SetInvestigateDestination(targetPosition);
     }
 
     /// <summary>
-    /// Atualizado a cada frame durante a investigação.
-    /// Quando chega ao ponto, olha ao redor antes de voltar à patrulha.
+    /// Define o destino de investigação.
+    /// Se useDoorPoints estiver ativo e houver uma porta relevante no caminho,
+    /// o inimigo passa pelo DoorPoint antes de chegar ao destino final.
     /// </summary>
+    private void SetInvestigateDestination(Vector3 target)
+    {
+        if (useDoorPoints && doorPoints != null && doorPoints.Count > 0)
+        {
+            Transform door = GetRelevantDoorPoint(transform.position, target);
+            if (door != null)
+            {
+                // Navega primeiro até a porta, depois até o destino
+                StartCoroutine(NavigateThroughDoor(door.position, target));
+                return;
+            }
+        }
+
+        agent.SetDestination(target);
+    }
+
+    /// <summary>
+    /// Navega até um DoorPoint e depois continua até o destino final.
+    /// </summary>
+    private IEnumerator NavigateThroughDoor(Vector3 doorPosition, Vector3 finalTarget)
+    {
+        agent.SetDestination(doorPosition);
+
+        // Aguarda chegar perto da porta
+        while (agent.pathPending || agent.remainingDistance > agent.stoppingDistance + 0.3f)
+        {
+            if (currentState != EnemyState.Investigate) yield break;
+            yield return null;
+        }
+
+        // Continua para o destino final
+        if (currentState == EnemyState.Investigate)
+            agent.SetDestination(finalTarget);
+    }
+
     private void UpdateInvestigate()
     {
         investigateTimer -= Time.deltaTime;
 
-        // Chegou ao ponto de investigação?
         if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance)
         {
             if (!isLookingAround)
                 lookAroundCoroutine = StartCoroutine(LookAroundThenPatrol());
         }
 
-        // Tempo de investigação esgotado → volta à patrulha
         if (investigateTimer <= 0f)
         {
             CancelLookAround();
@@ -332,27 +453,20 @@ public class Enemy : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Olha para os lados por alguns segundos e depois inicia a patrulha.
-    /// </summary>
     private IEnumerator LookAroundThenPatrol()
     {
         isLookingAround = true;
-        float lookTime = Random.Range(2f, 4f);
-        yield return StartCoroutine(LookAround(lookTime));
+        yield return StartCoroutine(LookAround(Random.Range(2.5f, 4.5f)));
         isLookingAround = false;
 
         if (currentState == EnemyState.Investigate)
             EnterPatrol();
     }
 
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
     // ESTADO: CHASE
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
 
-    /// <summary>
-    /// Configura o inimigo para o estado de perseguição.
-    /// </summary>
     private void EnterChase()
     {
         CancelPatrolCoroutines();
@@ -363,10 +477,6 @@ public class Enemy : MonoBehaviour
         agent.stoppingDistance = attackRange;
     }
 
-    /// <summary>
-    /// Atualizado a cada frame durante a perseguição.
-    /// Atualiza o destino continuamente para o Player.
-    /// </summary>
     private void UpdateChase()
     {
         if (playerTransform == null) return;
@@ -375,93 +485,166 @@ public class Enemy : MonoBehaviour
         agent.SetDestination(lastKnownPosition);
     }
 
-    // ─────────────────────────────────────────────
-    // COMPORTAMENTO: OLHAR PARA OS LADOS
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
+    // LOOK AROUND — COM VERIFICAÇÃO DE PAREDES
+    // ═══════════════════════════════════════════════
 
     /// <summary>
-    /// Gira o inimigo suavemente para os lados para simular um comportamento humano de busca.
-    /// Usa a rotação do Transform diretamente enquanto o agente está parado.
+    /// Gira o inimigo para os lados de forma humana, verificando antes
+    /// se a direção alvo está livre de paredes. Se estiver bloqueada,
+    /// escolhe a direção oposta ou para o giro.
     /// </summary>
     private IEnumerator LookAround(float duration)
     {
+        // Salva rotação original para evitar rotação cumulativa descontrolada
+        float startYaw = transform.eulerAngles.y;
+        float targetYaw = startYaw;
         float elapsed = 0f;
-        float direction = 1f;
-        float switchInterval = Random.Range(0.8f, 1.5f);
-        float switchTimer = switchInterval;
+        float holdTimer = 0f;
+        float holdTime = Random.Range(0.6f, 1.2f);
+        bool isHolding = false;
+
+        // Gera uma sequência de ângulos-alvo livres de parede
+        float[] offsets = GenerateLookOffsets();
+        int offsetIndex = 0;
+
+        if (offsets.Length > 0)
+            targetYaw = startYaw + offsets[offsetIndex];
 
         while (elapsed < duration)
         {
-            switchTimer -= Time.deltaTime;
-            if (switchTimer <= 0f)
+            elapsed += Time.deltaTime;
+            holdTimer += Time.deltaTime;
+
+            // Suavemente rotaciona em direção ao ângulo alvo
+            float currentYaw = Mathf.MoveTowardsAngle(
+                transform.eulerAngles.y,
+                targetYaw,
+                lookAroundSpeed * Time.deltaTime
+            );
+            transform.rotation = Quaternion.Euler(0f, currentYaw, 0f);
+
+            // Chegou perto do alvo: aguarda um momento e escolhe próximo
+            bool reachedTarget = Mathf.Abs(Mathf.DeltaAngle(currentYaw, targetYaw)) < 3f;
+            if (reachedTarget && !isHolding)
+                isHolding = true;
+
+            if (isHolding)
             {
-                direction = -direction;
-                switchTimer = Random.Range(0.8f, 1.5f);
+                if (holdTimer >= holdTime)
+                {
+                    isHolding = false;
+                    holdTimer = 0f;
+                    holdTime = Random.Range(0.5f, 1.3f);
+
+                    offsetIndex = (offsetIndex + 1) % offsets.Length;
+                    targetYaw = startYaw + offsets[offsetIndex];
+                }
             }
 
-            // Gira somente no eixo Y
-            transform.Rotate(0f, direction * lookAroundSpeed * Time.deltaTime, 0f);
-
-            elapsed += Time.deltaTime;
             yield return null;
         }
     }
 
-    // ─────────────────────────────────────────────
-    // API PÚBLICA — EVENTOS EXTERNOS
-    // ─────────────────────────────────────────────
-
     /// <summary>
-    /// Chamado externamente quando o Player atira.
-    /// O inimigo investiga a região do disparo com uma margem de incerteza.
+    /// Gera um array de offsets angulares (relativos à rotação atual)
+    /// que apontam para direções livres de parede.
     /// </summary>
-    /// <param name="shotPosition">Posição de origem do disparo.</param>
-    public void OnPlayerShot(Vector3 shotPosition)
+    private float[] GenerateLookOffsets()
     {
-        // Só investiga se não estiver já perseguindo
-        if (currentState == EnemyState.Chase) return;
+        // Candidatos: esquerda, direita, ligeiramente para cada lado
+        float[] candidates = { -maxLookAngle, maxLookAngle, -maxLookAngle * 0.5f, maxLookAngle * 0.5f, 0f };
+        var validOffsets = new List<float>();
 
-        // Adiciona incerteza para que o inimigo não saiba a posição exata
-        Vector3 noiseOffset = Random.insideUnitSphere * shotNoiseRadius;
-        noiseOffset.y = 0f;
-        Vector3 targetPoint = shotPosition + noiseOffset;
+        foreach (float offset in candidates)
+        {
+            Vector3 dir = Quaternion.Euler(0f, offset, 0f) * transform.forward;
+            if (IsDirectionClear(dir))
+                validOffsets.Add(offset);
+        }
 
-        EnterInvestigate(targetPoint);
+        // Fallback: se nenhuma direção estiver livre, retorna os dois principais
+        if (validOffsets.Count == 0)
+            return new float[] { -30f, 30f };
+
+        return validOffsets.ToArray();
     }
 
-    /// <summary>
-    /// Retorna verdadeiro se o inimigo está ativamente perseguindo o Player.
-    /// </summary>
-    public bool IsChasing() => currentState == EnemyState.Chase;
+    // ═══════════════════════════════════════════════
+    // UTILITÁRIOS — NAVMESH E VALIDAÇÃO
+    // ═══════════════════════════════════════════════
 
     /// <summary>
-    /// Retorna o estado atual do inimigo.
+    /// Retorna um ponto aleatório válido na NavMesh que também passa
+    /// na validação de distância mínima de paredes.
     /// </summary>
-    public EnemyState CurrentState => currentState;
-
-    // ─────────────────────────────────────────────
-    // UTILITÁRIOS
-    // ─────────────────────────────────────────────
-
-    /// <summary>
-    /// Retorna um ponto aleatório válido na NavMesh dentro do raio especificado.
-    /// Faz múltiplas tentativas para garantir que encontra um ponto válido.
-    /// </summary>
-    private Vector3 GetRandomNavMeshPoint(Vector3 center, float radius)
+    private Vector3 GetSafeRandomNavMeshPoint(Vector3 center, float radius)
     {
-        const int maxAttempts = 10;
+        const int maxAttempts = 15;
 
         for (int i = 0; i < maxAttempts; i++)
         {
             Vector3 randomPoint = center + Random.insideUnitSphere * radius;
-            randomPoint.y = center.y; // Mantém na altura do centro para evitar pontos no ar
+            randomPoint.y = center.y;
 
-            if (NavMesh.SamplePosition(randomPoint, out NavMeshHit hit, radius, NavMesh.AllAreas))
+            if (!NavMesh.SamplePosition(randomPoint, out NavMeshHit hit, radius, NavMesh.AllAreas))
+                continue;
+
+            if (IsDestinationSafe(hit.position))
                 return hit.position;
         }
 
-        // Fallback: retorna o próprio centro caso nenhum ponto seja encontrado
+        // Fallback: retorna o centro (mesmo que não seja ideal)
         return center;
+    }
+
+    /// <summary>
+    /// Retorna o DoorPoint mais relevante entre a posição atual e o destino.
+    /// Relevante = está aproximadamente entre os dois pontos e dentro da
+    /// distância de relevância configurada.
+    /// Retorna null se não houver nenhum DoorPoint adequado.
+    /// </summary>
+    private Transform GetRelevantDoorPoint(Vector3 from, Vector3 to)
+    {
+        Transform bestDoor = null;
+        float bestScore = float.MaxValue;
+        Vector3 midPoint = (from + to) * 0.5f;
+
+        foreach (Transform door in doorPoints)
+        {
+            if (door == null) continue;
+
+            // Distância do DoorPoint ao ponto médio do trajeto
+            float distToMid = Vector3.Distance(door.position, midPoint);
+            float distToPath = DistancePointToSegment(door.position, from, to);
+
+            // Aceita apenas portas próximas ao caminho
+            if (distToPath > doorPointRelevanceDistance * 0.5f) continue;
+            if (distToMid > doorPointRelevanceDistance) continue;
+
+            // Score: quanto menor, mais relevante
+            float score = distToPath + distToMid * 0.5f;
+            if (score < bestScore)
+            {
+                bestScore = score;
+                bestDoor = door;
+            }
+        }
+
+        return bestDoor;
+    }
+
+    /// <summary>
+    /// Calcula a distância mínima de um ponto a um segmento de linha.
+    /// Usado para avaliar quão próximo um DoorPoint está do trajeto.
+    /// </summary>
+    private float DistancePointToSegment(Vector3 point, Vector3 segA, Vector3 segB)
+    {
+        Vector3 ab = segB - segA;
+        Vector3 ap = point - segA;
+        float t = Mathf.Clamp01(Vector3.Dot(ap, ab) / ab.sqrMagnitude);
+        Vector3 closest = segA + ab * t;
+        return Vector3.Distance(point, closest);
     }
 
     private void CancelPatrolCoroutines()
@@ -484,68 +667,163 @@ public class Enemy : MonoBehaviour
         isLookingAround = false;
     }
 
-    // ─────────────────────────────────────────────
-    // GIZMOS — SOMENTE NO EDITOR
-    // ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════
+    // API PÚBLICA
+    // ═══════════════════════════════════════════════
 
     /// <summary>
-    /// Desenha o campo de visão e informações de debug no Editor.
-    /// Executado apenas quando o objeto está selecionado na hierarquia.
-    /// NUNCA deve ser chamado de dentro do Update().
+    /// Chamado quando o Player atira.
+    /// O inimigo investiga a região com margem de incerteza.
     /// </summary>
+    public void OnPlayerShot(Vector3 shotPosition)
+    {
+        if (currentState == EnemyState.Chase) return;
+
+        Vector3 noise = Random.insideUnitSphere * shotNoiseRadius;
+        noise.y = 0f;
+        Vector3 targetPoint = shotPosition + noise;
+
+        EnterInvestigate(targetPoint);
+    }
+
+    public bool IsChasing() => currentState == EnemyState.Chase;
+    public EnemyState CurrentState => currentState;
+
+    // ═══════════════════════════════════════════════
+    // GIZMOS — SOMENTE NO EDITOR
+    // ═══════════════════════════════════════════════
+
     private void OnDrawGizmosSelected()
     {
         DrawVisionCone();
+        DrawWallSensors();
+        DrawPatrolPoints();
+        DrawDoorPoints();
         DrawStateInfo();
+        DrawWanderRadius();
     }
 
+    // ── Cone de Visão ──────────────────────────────
     private void DrawVisionCone()
     {
-        // Esfera de raio de visão
-        Gizmos.color = new Color(1f, 1f, 0f, 0.15f);
+        Gizmos.color = new Color(1f, 1f, 0f, 0.08f);
         Gizmos.DrawSphere(transform.position, viewRadius);
 
-        // Contorno da esfera
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, viewRadius);
 
-        // Linhas laterais do cone de visão
-        Vector3 leftBoundary = Quaternion.Euler(0f, -viewAngle * 0.5f, 0f) * transform.forward * viewRadius;
-        Vector3 rightBoundary = Quaternion.Euler(0f, viewAngle * 0.5f, 0f) * transform.forward * viewRadius;
+        Vector3 left = Quaternion.Euler(0f, -viewAngle * 0.5f, 0f) * transform.forward * viewRadius;
+        Vector3 right = Quaternion.Euler(0f, viewAngle * 0.5f, 0f) * transform.forward * viewRadius;
 
         Gizmos.color = Color.green;
-        Gizmos.DrawLine(transform.position, transform.position + leftBoundary);
-        Gizmos.DrawLine(transform.position, transform.position + rightBoundary);
+        Gizmos.DrawLine(transform.position, transform.position + left);
+        Gizmos.DrawLine(transform.position, transform.position + right);
 
-        // Linha de direção frontal
-        Gizmos.color = Color.cyan;
+        Gizmos.color = new Color(0f, 1f, 0.4f);
         Gizmos.DrawLine(transform.position, transform.position + transform.forward * viewRadius);
     }
 
+    // ── Raycasts de Parede ─────────────────────────
+    private void DrawWallSensors()
+    {
+        Vector3 pos = transform.position + Vector3.up * 0.5f;
+        Vector3 fwd = transform.forward;
+
+        DrawWallRay(pos, fwd, wallCheckDistance, wallFront, "F");
+        DrawWallRay(pos, Quaternion.Euler(0f, -90f, 0f) * fwd, wallCheckDistance * 0.7f, wallLeft, "L");
+        DrawWallRay(pos, Quaternion.Euler(0f, 90f, 0f) * fwd, wallCheckDistance * 0.7f, wallRight, "R");
+        DrawWallRay(pos, Quaternion.Euler(0f, -45f, 0f) * fwd, wallCheckDistance * 0.9f, wallDiagFL, "DL");
+        DrawWallRay(pos, Quaternion.Euler(0f, 45f, 0f) * fwd, wallCheckDistance * 0.9f, wallDiagFR, "DR");
+    }
+
+    private void DrawWallRay(Vector3 origin, Vector3 dir, float dist, bool hit, string label)
+    {
+        Gizmos.color = hit ? Color.red : Color.white;
+        Gizmos.DrawRay(origin, dir.normalized * dist);
+    }
+
+    // ── PatrolPoints ───────────────────────────────
+    private void DrawPatrolPoints()
+    {
+        if (patrolPoints == null) return;
+
+        for (int i = 0; i < patrolPoints.Count; i++)
+        {
+            if (patrolPoints[i] == null) continue;
+
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawWireSphere(patrolPoints[i].position, 0.3f);
+
+            // Linha conectando os waypoints em ordem
+            if (i > 0 && patrolPoints[i - 1] != null)
+            {
+                Gizmos.color = new Color(0f, 1f, 1f, 0.4f);
+                Gizmos.DrawLine(patrolPoints[i - 1].position, patrolPoints[i].position);
+            }
+        }
+
+        // Fecha o ciclo
+        if (patrolPoints.Count > 1 &&
+            patrolPoints[0] != null &&
+            patrolPoints[patrolPoints.Count - 1] != null)
+        {
+            Gizmos.color = new Color(0f, 1f, 1f, 0.2f);
+            Gizmos.DrawLine(patrolPoints[patrolPoints.Count - 1].position, patrolPoints[0].position);
+        }
+    }
+
+    // ── DoorPoints ─────────────────────────────────
+    private void DrawDoorPoints()
+    {
+        if (doorPoints == null) return;
+
+        foreach (Transform door in doorPoints)
+        {
+            if (door == null) continue;
+
+            Gizmos.color = new Color(1f, 0.5f, 0f); // laranja
+            Gizmos.DrawWireCube(door.position, new Vector3(0.3f, 1.8f, 0.1f));
+            Gizmos.DrawWireSphere(door.position, 0.2f);
+        }
+    }
+
+    // ── Info de Estado ─────────────────────────────
     private void DrawStateInfo()
     {
-        // Linha vermelha até o Player quando perseguindo
-        if (currentState == EnemyState.Chase && playerTransform != null)
+        if (Application.isPlaying)
         {
-            Gizmos.color = Color.red;
-            Gizmos.DrawLine(transform.position, playerTransform.position);
-            Gizmos.DrawWireSphere(playerTransform.position, 0.4f);
+            if (currentState == EnemyState.Chase && playerTransform != null)
+            {
+                Gizmos.color = Color.red;
+                Gizmos.DrawLine(transform.position, playerTransform.position);
+                Gizmos.DrawWireSphere(playerTransform.position, 0.4f);
+            }
+
+            if (currentState == EnemyState.Investigate)
+            {
+                Gizmos.color = Color.magenta;
+                Gizmos.DrawLine(transform.position, lastKnownPosition);
+                Gizmos.DrawWireSphere(lastKnownPosition, 0.5f);
+            }
         }
 
-        // Linha magenta até a última posição conhecida quando investigando
-        if (currentState == EnemyState.Investigate)
-        {
-            Gizmos.color = Color.magenta;
-            Gizmos.DrawLine(transform.position, lastKnownPosition);
-            Gizmos.DrawWireSphere(lastKnownPosition, 0.5f);
-        }
-
-        // Ponto do spawn
+        // Ponto de spawn
         Gizmos.color = Color.blue;
-        Gizmos.DrawWireSphere(spawnPosition, 0.3f);
+        Gizmos.DrawWireSphere(
+            Application.isPlaying ? spawnPosition : transform.position,
+            0.3f
+        );
+    }
 
-        // Raio de perambulação
-        Gizmos.color = new Color(0f, 0f, 1f, 0.08f);
-        Gizmos.DrawSphere(spawnPosition, wanderRadius);
+    // ── Raio de Perambulação ───────────────────────
+    private void DrawWanderRadius()
+    {
+        if (patrolPoints != null && patrolPoints.Count > 0) return; // Não mostra se há waypoints manuais
+
+        Vector3 center = Application.isPlaying ? spawnPosition : transform.position;
+        Gizmos.color = new Color(0f, 0f, 1f, 0.06f);
+        Gizmos.DrawSphere(center, wanderRadius);
+        Gizmos.color = new Color(0f, 0f, 1f, 0.3f);
+        Gizmos.DrawWireSphere(center, wanderRadius);
     }
 }
