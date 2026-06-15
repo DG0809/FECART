@@ -2,16 +2,19 @@ using UnityEngine;
 
 public class Player : MonoBehaviour
 {
+    [Header("Movimento")]
     [SerializeField] private float moveSpeed = 5f;
     [SerializeField] private float mouseSensitivity = 2f;
+
+    [Header("Referências")]
     [SerializeField] private Transform handPoint;
     [SerializeField] private Camera mainCamera;
 
     private Rigidbody rb;
     private Collider lastItemCollider;
-    private Vector3 moveDirection = Vector3.zero;
+    private Vector3 moveDirection;
     private Transform cameraTransform;
-    private float rotationX = 0f;
+    private float rotationX;
     private Weapon equippedWeapon;
 
     private void Start()
@@ -19,9 +22,7 @@ public class Player : MonoBehaviour
         rb = GetComponent<Rigidbody>();
 
         if (rb != null)
-        {
             rb.constraints = RigidbodyConstraints.FreezeRotation;
-        }
 
         if (handPoint == null)
         {
@@ -38,23 +39,25 @@ public class Player : MonoBehaviour
             cameraObj.transform.localPosition = new Vector3(0, 0.6f, 0);
             mainCamera = cameraObj.AddComponent<Camera>();
             mainCamera.tag = "MainCamera";
-            cameraTransform = cameraObj.transform;
         }
-        else
+
+        cameraTransform = mainCamera.transform;
+
+        if (cameraTransform.parent != transform)
         {
-            cameraTransform = mainCamera.transform;
-            if (cameraTransform.parent != transform)
-            {
-                cameraTransform.SetParent(transform);
-                cameraTransform.localPosition = new Vector3(0, 0.6f, 0);
-            }
+            cameraTransform.SetParent(transform);
+            cameraTransform.localPosition = new Vector3(0, 0.6f, 0);
         }
 
         Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
     }
 
     private void Update()
     {
+        if (GameStateManager.Instance != null && GameStateManager.Instance.IsPaused())
+            return;
+
         HandleInput();
         HandleMouse();
         HandleInteract();
@@ -71,10 +74,13 @@ public class Player : MonoBehaviour
 
         if (Input.GetKey(KeyCode.W))
             moveDirection += transform.forward;
+
         if (Input.GetKey(KeyCode.S))
             moveDirection -= transform.forward;
+
         if (Input.GetKey(KeyCode.A))
             moveDirection -= transform.right;
+
         if (Input.GetKey(KeyCode.D))
             moveDirection += transform.right;
 
@@ -84,6 +90,8 @@ public class Player : MonoBehaviour
 
     private void Move()
     {
+        if (rb == null) return;
+
         Vector3 velocity = new Vector3(
             moveDirection.x * moveSpeed,
             rb.linearVelocity.y,
@@ -98,37 +106,31 @@ public class Player : MonoBehaviour
         float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
         float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
 
-        // Rotação horizontal do player
-        Vector3 playerRotation = transform.eulerAngles;
-        playerRotation.y += mouseX;
-        transform.eulerAngles = playerRotation;
+        transform.Rotate(Vector3.up * mouseX);
 
-        // Rotação vertical só da camera
         rotationX -= mouseY;
         rotationX = Mathf.Clamp(rotationX, -90f, 90f);
+
         cameraTransform.localRotation = Quaternion.Euler(rotationX, 0, 0);
     }
 
     private void HandleInteract()
     {
-        if (Input.GetKeyDown(KeyCode.E))
-        {
-            if (lastItemCollider != null)
-            {
-                Item item = lastItemCollider.GetComponent<Item>();
-                if (item != null)
-                {
-                    item.Collect(handPoint);
+        if (!Input.GetKeyDown(KeyCode.E)) return;
+        if (lastItemCollider == null) return;
 
-                    Weapon weapon = lastItemCollider.GetComponent<Weapon>();
-                    if (weapon != null)
-                    {
-                        equippedWeapon = weapon;
-                        weapon.NotifyCollected();
-                    }
-                }
-            }
+        Weapon weapon = lastItemCollider.GetComponent<Weapon>();
+
+        if (weapon != null)
+        {
+            EquipWeapon(weapon);
         }
+    }
+
+    private void EquipWeapon(Weapon weapon)
+    {
+        equippedWeapon = weapon;
+        weapon.Collect(handPoint, this);
     }
 
     public void SetLastItemCollider(Collider collider)
@@ -139,13 +141,32 @@ public class Player : MonoBehaviour
     public void RemoveLastItemCollider(Collider collider)
     {
         if (lastItemCollider == collider)
-        {
             lastItemCollider = null;
-        }
     }
 
     public bool HasEquippedWeapon()
     {
         return equippedWeapon != null;
+    }
+
+    public Camera GetPlayerCamera()
+    {
+        return mainCamera;
+    }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("Enemy"))
+        {
+            GameStateManager.Instance.GoToDefeat();
+        }
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other.CompareTag("Enemy"))
+        {
+            GameStateManager.Instance.GoToDefeat();
+        }
     }
 }
