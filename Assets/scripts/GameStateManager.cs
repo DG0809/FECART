@@ -1,5 +1,8 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+using TMPro;
+using System.Collections;
 
 public class GameStateManager : MonoBehaviour
 {
@@ -14,8 +17,17 @@ public class GameStateManager : MonoBehaviour
     [SerializeField] private GameObject continueButton;
     [SerializeField] private GameObject menuButton;
 
+    [Header("Arma encontrada")]
+    [SerializeField] private GameObject foundWeaponPanel;
+    [SerializeField] private TMP_Text foundWeaponText;
+    [SerializeField] private Image fadeImage;
+    [SerializeField] private string foundWeaponMessage = "Você encontrou a arma!";
+    [SerializeField] private float foundMessageDuration = 2f;
+    [SerializeField] private float fadeDuration = 1f;
+
     private bool isPaused = false;
     private bool gameEnded = false;
+    private bool isChangingScene = false;
 
     private void Awake()
     {
@@ -29,6 +41,8 @@ public class GameStateManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
 
         SetPauseButtons(false);
+        SetFoundWeaponUI(false);
+        SetFadeAlpha(0f);
     }
 
     private void Update()
@@ -85,6 +99,13 @@ public class GameStateManager : MonoBehaviour
         SceneManager.LoadScene(sceneName);
     }
 
+    public void StartFoundWeaponSequence(string nextSceneName)
+    {
+        if (isChangingScene) return;
+
+        StartCoroutine(FoundWeaponSequence(nextSceneName));
+    }
+
     public void GoToVictory()
     {
         if (gameEnded) return;
@@ -132,5 +153,59 @@ public class GameStateManager : MonoBehaviour
 
         if (menuButton != null)
             menuButton.SetActive(active);
+    }
+
+    private IEnumerator FoundWeaponSequence(string nextSceneName)
+    {
+        isChangingScene = true;
+        isPaused = true;
+        Time.timeScale = 0f;
+
+        SetPauseButtons(false);
+        SetFoundWeaponUI(true);
+
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        yield return new WaitForSecondsRealtime(foundMessageDuration);
+
+        if (fadeImage != null)
+        {
+            float elapsedTime = 0f;
+
+            while (elapsedTime < fadeDuration)
+            {
+                elapsedTime += Time.unscaledDeltaTime;
+                SetFadeAlpha(Mathf.Clamp01(elapsedTime / fadeDuration));
+
+                yield return null;
+            }
+        }
+
+        isPaused = false;
+        gameEnded = false;
+        Time.timeScale = 1f;
+
+        SceneManager.LoadScene(nextSceneName);
+    }
+
+    private void SetFoundWeaponUI(bool active)
+    {
+        if (foundWeaponPanel != null)
+            foundWeaponPanel.SetActive(active);
+
+        if (foundWeaponText != null)
+            foundWeaponText.text = foundWeaponMessage;
+    }
+
+    private void SetFadeAlpha(float alpha)
+    {
+        if (fadeImage == null) return;
+
+        Color color = fadeImage.color;
+        color.a = alpha;
+        fadeImage.color = color;
+
+        fadeImage.gameObject.SetActive(alpha > 0f);
     }
 }

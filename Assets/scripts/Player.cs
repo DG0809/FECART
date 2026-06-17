@@ -10,6 +10,9 @@ public class Player : MonoBehaviour
     [SerializeField] private Transform handPoint;
     [SerializeField] private Camera mainCamera;
 
+    [Header("Interação")]
+    [SerializeField] private float interactDistance = 3f;
+
     private Rigidbody rb;
     private Collider lastItemCollider;
     private Vector3 moveDirection;
@@ -117,6 +120,10 @@ public class Player : MonoBehaviour
     private void HandleInteract()
     {
         if (!Input.GetKeyDown(KeyCode.E)) return;
+
+        if (TryInteractByRaycast())
+            return;
+
         if (lastItemCollider == null) return;
 
         Weapon weapon = lastItemCollider.GetComponent<Weapon>();
@@ -125,6 +132,34 @@ public class Player : MonoBehaviour
         {
             EquipWeapon(weapon);
         }
+    }
+
+    private bool TryInteractByRaycast()
+    {
+        if (mainCamera == null) return false;
+
+        Ray ray = new Ray(mainCamera.transform.position, mainCamera.transform.forward);
+
+        if (!Physics.Raycast(ray, out RaycastHit hit, interactDistance))
+            return false;
+
+        WeaponShelf shelf = hit.collider.GetComponentInParent<WeaponShelf>();
+
+        if (shelf != null)
+        {
+            shelf.OpenShelf();
+            return true;
+        }
+
+        Weapon weapon = hit.collider.GetComponentInParent<Weapon>();
+
+        if (weapon != null)
+        {
+            EquipWeapon(weapon);
+            return true;
+        }
+
+        return false;
     }
 
     private void EquipWeapon(Weapon weapon)
