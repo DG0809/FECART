@@ -18,7 +18,7 @@ public class ShelfWeaponManager : MonoBehaviour
         if (findShelvesAutomatically || shelves.Count == 0)
         {
             shelves.Clear();
-            shelves.AddRange(FindObjectsOfType<WeaponShelf>());
+            shelves.AddRange(FindObjectsByType<WeaponShelf>(FindObjectsSortMode.None));
         }
 
         ChooseRandomShelf();

@@ -63,7 +63,7 @@ public class ObjectiveHud : MonoBehaviour
         if (panel != null && messageText != null)
             return;
 
-        Canvas canvas = FindObjectOfType<Canvas>();
+        Canvas canvas = FindFirstObjectByType<Canvas>();
 
         if (canvas == null)
             canvas = CreateCanvas();
